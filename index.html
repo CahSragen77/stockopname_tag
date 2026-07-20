@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Stok Opname - Amanda Mart</title>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <style>
+        :root {
+            --primary: #1d6fe3;
+            --success: #2e7d32;
+            --danger: #e53935;
+            --warning: #f57c00;
+            --bg: #f0f4f8;
+            --card: #ffffff;
+            --text: #1a1d23;
+            --border: #dde3ec;
+            --radius: 14px;
+            --shadow: 0 4px 16px rgba(0,0,0,0.06);
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 100vh;
+        }
+
+        /* Toast */
+        .toast-container {
+            position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+            z-index: 9999; display: flex; flex-direction: column; gap: 6px;
+            width: 92%; max-width: 480px; pointer-events: none;
+        }
+        .toast {
+            padding: 12px 16px; border-radius: 10px; color: #fff; font-weight: 700;
+            font-size: 14px; box-shadow: 0 8px 20px rgba(0,0,0,0.18);
+            animation: slideDown 0.3s ease; pointer-events: auto;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .toast.error { background: #d32f2f; border-left: 5px solid #b71c1c; }
+        .toast.success { background: #2e7d32; border-left: 5px solid #1b5e20; }
+        .toast.warning { background: #f57c00; border-left: 5px solid #e65100; }
+        @keyframes slideDown { from { opacity:0; transform:translateY(-30px); } to { opacity:1; transform:translateY(0); } }
+
+        /* Layout */
+        .container { max-width: 700px; margin: 0 auto; padding: 14px; }
+
+        /* Header */
+        .header {
+            background: linear-gradient(135deg, #1a237e, #283593);
+            color: #fff; padding: 16px 20px; border-radius: var(--radius);
+            margin-bottom: 14px; display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 4px 12px rgba(26,35,126,0.3);
+        }
+        .header h1 { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; flex:1; }
+        .header .badge {
+            background: rgba(255,255,255,0.2); padding: 6px 12px;
+            border-radius: 20px; font-size: 11px; font-weight: 700;
+        }
+
+        /* Cards */
+        .card {
+            background: var(--card); border-radius: var(--radius);
+            box-shadow: var(--shadow); padding: 16px; margin-bottom: 12px;
+            border: 1px solid var(--border);
+        }
+        .card-title {
+            font-size: 13px; text-transform: uppercase; letter-spacing: 0.6px;
+            color: #667; font-weight: 700; margin-bottom: 10px;
+            display: flex; align-items: center; gap: 6px;
+        }
+
+        /* Input */
+        input[type="text"], input[type="number"], input[type="file"], select {
+            width: 100%; padding: 13px; border: 2px solid var(--border);
+            border-radius: 10px; font-size: 16px; background: #fafbfc;
+            transition: 0.2s; margin: 4px 0;
+        }
+        input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(29,111,227,0.12); outline: none; }
+        input[type="number"] { font-size: 20px; font-weight: 700; text-align: center; }
+
+        button {
+            cursor: pointer; border: none; border-radius: 10px; font-weight: 700;
+            font-size: 14px; padding: 12px 18px; transition: 0.2s;
+            touch-action: manipulation; display: inline-flex; align-items: center;
+            justify-content: center; gap: 6px; width: 100%; margin: 4px 0;
+        }
+        .btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 8px rgba(29,111,227,0.3); }
+        .btn-primary:active { transform: scale(0.97); }
+        .btn-success { background: var(--success); color: #fff; box-shadow: 0 2px 8px rgba(46,125,50,0.3); }
+        .btn-warning { background: var(--warning); color: #fff; box-shadow: 0 2px 8px rgba(245,124,0,0.3); }
+        .btn-outline { background: #fff; border: 2px solid var(--border); color: #333; }
+        .btn-danger { background: #fff; border: 2px solid #e53935; color: #e53935; }
+        .btn-sm { padding: 7px 12px; font-size: 12px; width: auto; }
+
+        /* Scanner */
+        .scanner-btn {
+            background: #ff9800; color: #fff; font-size: 16px; padding: 15px;
+            border-radius: 50px; box-shadow: 0 4px 16px rgba(255,152,0,0.4);
+            animation: pulse 2s infinite; width: 100%;
+        }
+        @keyframes pulse {
+            0%,100% { box-shadow: 0 4px 16px rgba(255,152,0,0.4); }
+            50% { box-shadow: 0 4px 28px rgba(255,152,0,0.7); }
+        }
+        #reader { width: 100%; border-radius: 12px; overflow: hidden; margin: 8px 0; border: 2px solid var(--border); }
+        #scanMsg { font-size: 13px; min-height: 20px; margin-top: 4px; font-weight: 600; text-align: center; }
+
+        /* Product Info Card */
+        .product-info {
+            background: #e8f5e9; border: 2px solid #4caf50; border-radius: 12px;
+            padding: 14px; margin: 10px 0; display: none;
+        }
+        .product-info.show { display: block; }
+        .product-info .name { font-size: 16px; font-weight: 700; color: #1b5e20; }
+        .product-info .code { font-size: 12px; color: #555; }
+        .product-info .price { font-size: 18px; font-weight: 800; color: #e65100; }
+
+        /* Qty Input */
+        .qty-row {
+            display: flex; gap: 8px; align-items: center; margin: 10px 0;
+        }
+        .qty-row input { flex: 1; font-size: 24px; }
+        .qty-row button { width: 50px; height: 50px; font-size: 22px; border-radius: 12px; padding: 0; }
+
+        /* Stok Table */
+        .stok-table {
+            width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px;
+        }
+        .stok-table th {
+            background: #f5f5f5; padding: 10px 6px; text-align: left; font-size: 11px;
+            text-transform: uppercase; position: sticky; top: 0;
+        }
+        .stok-table td { padding: 9px 6px; border-bottom: 1px solid #eee; }
+        .stok-table .qty-cell { text-align: center; font-weight: 700; font-size: 15px; }
+        .stok-table .act-cell { text-align: center; }
+        .table-wrap { max-height: 380px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+
+        /* Summary */
+        .summary {
+            display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;
+        }
+        .summary-item {
+            flex: 1; min-width: 100px; background: #f5f5f5;
+            border-radius: 10px; padding: 10px; text-align: center;
+        }
+        .summary-item .num { font-size: 22px; font-weight: 800; color: var(--primary); }
+        .summary-item .lbl { font-size: 10px; text-transform: uppercase; color: #888; }
+
+        /* Empty state */
+        .empty-state { text-align: center; padding: 30px; color: #aaa; }
+        .empty-state .icon { font-size: 50px; margin-bottom: 8px; }
+
+        @media print {
+            .no-print { display: none !important; }
+            body { background: #fff; }
+            .container { max-width: 100%; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toast-container" id="toastContainer"></div>
+
+    <div class="container">
+
+        <!-- HEADER -->
+        <div class="header no-print">
+            <span style="font-size:28px;">📋</span>
+            <h1>Stok Opname</h1>
+            <span class="badge" id="itemCount">0 item</span>
+        </div>
+
+        <!-- MASTER UPLOAD -->
+        <div class="card no-print">
+            <div class="card-title">📂 Master Produk</div>
+            <input type="file" id="masterFile" accept=".xlsx,.xls,.csv">
+            <div style="font-size:12px;color:#888;margin-top:4px;" id="masterStatus">Belum ada master</div>
+        </div>
+
+        <!-- SCAN AREA -->
+        <div class="card no-print">
+            <div class="card-title">📷 Scan Barcode</div>
+            <input type="text" id="scanInput" placeholder="Scan / ketik barcode lalu Enter">
+            <div id="scanMsg"></div>
+            <button class="scanner-btn" id="btnScan">📷 Buka Kamera Scanner</button>
+            <div id="reader" style="display:none;"></div>
+            <button class="btn-outline" id="btnStopScan" style="display:none;">⏹️ Stop Kamera</button>
+
+            <!-- PRODUCT PREVIEW -->
+            <div class="product-info" id="productPreview">
+                <div class="name" id="prevName">-</div>
+                <div class="code">PLU: <span id="prevPlu">-</span> | Barcode: <span id="prevBarcode">-</span></div>
+                <div class="price">Rp. <span id="prevPrice">-</span> / <span id="prevUnit">-</span></div>
+                <div style="font-size:11px;color:#888;">Exp: <span id="prevExpire">-</span></div>
+            </div>
+
+            <!-- QTY INPUT -->
+            <div class="qty-row" id="qtyRow" style="display:none;">
+                <button class="btn-outline" onclick="adjustQty(-1)" style="width:50px;">−</button>
+                <input type="number" id="qtyInput" value="1" min="0" max="99999" onchange="onQtyChange()">
+                <button class="btn-outline" onclick="adjustQty(1)" style="width:50px;">+</button>
+                <button class="btn-success" onclick="confirmEntry()" style="flex:1;">✅ Simpan</button>
+            </div>
+        </div>
+
+        <!-- STOK TABLE -->
+        <div class="card">
+            <div class="card-title" style="justify-content:space-between;">
+                📦 Hasil Stok Opname
+                <button class="btn-danger btn-sm" onclick="clearAll()" style="width:auto;">🗑️ Kosongkan</button>
+            </div>
+            <div class="table-wrap" id="tableWrap">
+                <table class="stok-table" id="stokTable">
+                    <thead>
+                        <tr>
+                            <th>PLU</th>
+                            <th>Nama Produk</th>
+                            <th>Qty</th>
+                            <th>Satuan</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="stokBody">
+                        <tr><td colspan="5" class="empty-state"><div class="icon">📭</div>Belum ada data stok</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- SUMMARY -->
+            <div class="summary">
+                <div class="summary-item">
+                    <div class="num" id="totalSku">0</div>
+                    <div class="lbl">Total SKU</div>
+                </div>
+                <div class="summary-item">
+                    <div class="num" id="totalQty">0</div>
+                    <div class="lbl">Total Qty</div>
+                </div>
+            </div>
+
+            <!-- EXPORT -->
+            <button class="btn-primary" onclick="exportStok()" style="margin-top:10px;">📥 Export ke Excel</button>
+        </div>
+
+    </div>
+
+    <script>
+        (function() {
+            // ========== STATE ==========
+            let masterMap = new Map(); // PLU → product
+            let barcodeToPlu = new Map(); // barcode asli → PLU
+            let stokData = new Map(); // PLU → {product, qty}
+            let currentProduct = null; // produk yang sedang discan
+            let html5QrScanner = null;
+            let isScanning = false;
+
+            // ========== TOAST ==========
+            function showToast(msg, type = 'error') {
+                const c = document.getElementById('toastContainer');
+                const t = document.createElement('div');
+                t.className = `toast ${type}`;
+                t.innerHTML = `<span>${ {error:'❌',success:'✅',warning:'⚠️'}[type]||'📢' }</span> ${msg}`;
+                c.appendChild(t);
+                setTimeout(() => { t.style.opacity = '0';
+                    t.style.transition = 'opacity 0.3s';
+                    setTimeout(() => t.remove(), 300); }, 3000);
+            }
+
+            // ========== RESOLVE PRODUCT ==========
+            function resolveProduct(code) {
+                const c = String(code).trim();
+                if (!c) return null;
+                if (masterMap.has(c)) return masterMap.get(c);
+                if (barcodeToPlu.has(c)) return masterMap.get(barcodeToPlu.get(c));
+                return null;
+            }
+
+            // ========== MASTER LOADING ==========
+            function loadMaster(rows) {
+                masterMap.clear();
+                barcodeToPlu.clear();
+                let count = 0;
+                rows.forEach(r => {
+                    const keys = Object.keys(r);
+                    const get = nms => { const k = keys.find(k => nms.includes(String(k).trim()
+                            .toLowerCase())); return k ? r[k] : ''; };
+                    const plu = String(get(['plu', 'kode'])).trim();
+                    const barcodeAsli = String(get(['barcode', 'ean'])).trim();
+                    const desc = get(['descp', 'desc', 'nama', 's_descp']);
+                    const unit = get(['sat1', 'satuan', 'unit']) || 'PCS';
+                    const price = parseInt(String(get(['price1', 'harga', 'm_price'])).replace(
+                        /[^\d]/g, '')) || 0;
+                    const returHari = get(['retur_hari']) || '';
+                    if (plu && desc) {
+                        masterMap.set(plu, { plu, barcodeAsli, desc: String(desc), unit: String(
+                                unit).toUpperCase(), price, returHari });
+                        if (barcodeAsli && barcodeAsli !== plu) barcodeToPlu.set(barcodeAsli,
+                        plu);
+                        count++;
+                    }
+                });
+                document.getElementById('masterStatus').textContent =
+                    `✅ ${count} produk (${barcodeToPlu.size} barcode terpetakan)`;
+                showToast(`Master: ${count} produk`, 'success');
+            }
+
+            document.getElementById('masterFile').addEventListener('change', async function(e) {
+                const f = e.target.files[0];
+                if (!f) return;
+                try {
+                    const data = await f.arrayBuffer();
+                    const wb = XLSX.read(data, { type: 'array' });
+                    loadMaster(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '' }));
+                } catch (err) { showToast('Gagal baca file: ' + err.message, 'error'); }
+            });
+
+            // ========== SCAN & INPUT ==========
+            function handleScan(code) {
+                const p = resolveProduct(code);
+                if (!p) {
+                    document.getElementById('scanMsg').textContent = '❌ Tidak ditemukan: ' + code;
+                    document.getElementById('scanMsg').style.color = '#c33';
+                    hideProductPreview();
+                    showToast('Produk tidak ditemukan: ' + code, 'error');
+                    return;
+                }
+                currentProduct = p;
+                document.getElementById('scanMsg').textContent = '✅ Ditemukan: ' + p.desc;
+                document.getElementById('scanMsg').style.color = '#2e7d32';
+                showProductPreview(p);
+                showToast('Terdeteksi: ' + p.desc, 'success');
+                if (navigator.vibrate) navigator.vibrate(100);
+                // Pre-fill qty
+                document.getElementById('qtyInput').value = 1;
+            }
+
+            function showProductPreview(p) {
+                document.getElementById('productPreview').classList.add('show');
+                document.getElementById('prevName').textContent = p.desc;
+                document.getElementById('prevPlu').textContent = p.plu;
+                document.getElementById('prevBarcode').textContent = p.barcodeAsli || '-';
+                document.getElementById('prevPrice').textContent = p.price.toLocaleString('id-ID');
+                document.getElementById('prevUnit').textContent = p.unit;
+                document.getElementById('prevExpire').textContent = p.returHari || '-';
+                document.getElementById('qtyRow').style.display = 'flex';
+            }
+
+            function hideProductPreview() {
+                document.getElementById('productPreview').classList.remove('show');
+                document.getElementById('qtyRow').style.display = 'none';
+                currentProduct = null;
+            }
+
+            function adjustQty(delta) {
+                const inp = document.getElementById('qtyInput');
+                let val = parseInt(inp.value) || 0;
+                val = Math.max(0, val + delta);
+                inp.value = val;
+            }
+
+            function onQtyChange() {
+                const inp = document.getElementById('qtyInput');
+                if (parseInt(inp.value) < 0) inp.value = 0;
+            }
+
+            function confirmEntry() {
+                if (!currentProduct) {
+                    showToast('Scan produk dulu.', 'warning');
+                    return;
+                }
+                const qty = parseInt(document.getElementById('qtyInput').value) || 0;
+                if (qty < 0) { showToast('Qty tidak boleh negatif.', 'error'); return; }
+                stokData.set(currentProduct.plu, { product: currentProduct, qty: qty });
+                renderStokTable();
+                hideProductPreview();
+                document.getElementById('scanInput').value = '';
+                document.getElementById('scanMsg').textContent = '';
+                document.getElementById('qtyInput').value = 1;
+                showToast(`Disimpan: ${currentProduct.desc} x${qty}`, 'success');
+                currentProduct = null;
+            }
+
+            // Manual input
+            document.getElementById('scanInput').addEventListener('keydown', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const v = e.target.value.trim();
+                    if (!v) return;
+                    handleScan(v);
+                }
+            });
+
+            // Scanner
+            async function startScanner() {
+                if (isScanning) return;
+                document.getElementById('reader').style.display = 'block';
+                document.getElementById('btnStopScan').style.display = 'block';
+                document.getElementById('btnScan').style.display = 'none';
+                try {
+                    html5QrScanner = new Html5Qrcode("reader");
+                    isScanning = true;
+                    await html5QrScanner.start({ facingMode: "environment" }, { fps: 10, qrbox: { width: 250,
+                            height: 100 } }, (decodedText) => {
+                        document.getElementById('scanInput').value = decodedText;
+                        handleScan(decodedText);
+                    }, () => {});
+                } catch (err) {
+                    showToast('Gagal akses kamera: ' + err.message, 'error');
+                    stopScanner();
+                }
+            }
+
+            async function stopScanner() {
+                if (html5QrScanner && isScanning) {
+                    try { await html5QrScanner.stop();
+                        html5QrScanner.clear(); } catch (e) {}
+                    html5QrScanner = null;
+                    isScanning = false;
+                }
+                document.getElementById('reader').style.display = 'none';
+                document.getElementById('btnStopScan').style.display = 'none';
+                document.getElementById('btnScan').style.display = 'block';
+            }
+
+            document.getElementById('btnScan').addEventListener('click', startScanner);
+            document.getElementById('btnStopScan').addEventListener('click', stopScanner);
+
+            // ========== STOK TABLE ==========
+            function renderStokTable() {
+                const tbody = document.getElementById('stokBody');
+                const arr = Array.from(stokData.values());
+                if (!arr.length) {
+                    tbody.innerHTML =
+                        '<tr><td colspan="5" class="empty-state"><div class="icon">📭</div>Belum ada data stok</td></tr>';
+                } else {
+                    tbody.innerHTML = arr.map((s, i) => `
+                <tr>
+                  <td>${s.product.plu}</td>
+                  <td>${s.product.desc}</td>
+                  <td class="qty-cell">${s.qty}</td>
+                  <td>${s.product.unit}</td>
+                  <td class="act-cell">
+                    <button class="btn-danger btn-sm" onclick="window._removeStok('${s.product.plu}')" style="width:auto;">🗑️</button>
+                  </td>
+                </tr>
+              `).join('');
+                }
+                document.getElementById('totalSku').textContent = stokData.size;
+                document.getElementById('totalQty').textContent = Array.from(stokData.values()).reduce((sum,
+                    s) => sum + s.qty, 0);
+                document.getElementById('itemCount').textContent = stokData.size + ' item';
+            }
+
+            window._removeStok = function(plu) {
+                stokData.delete(plu);
+                renderStokTable();
+                showToast('Item dihapus.', 'warning');
+            };
+
+            function clearAll() {
+                if (!stokData.size) { showToast('Data sudah kosong.', 'warning'); return; }
+                if (confirm('Hapus SEMUA data stok opname?')) {
+                    stokData.clear();
+                    renderStokTable();
+                    showToast('Semua data dikosongkan.', 'success');
+                }
+            }
+
+            // ========== EXPORT ==========
+            function exportStok() {
+                if (!stokData.size) { showToast('Belum ada data untuk diexport.', 'error'); return; }
+                const arr = Array.from(stokData.values()).map(s => ({
+                    PLU: s.product.plu,
+                    Barcode: s.product.barcodeAsli || '-',
+                    'Nama Produk': s.product.desc,
+                    Qty: s.qty,
+                    Satuan: s.product.unit,
+                    Harga: s.product.price,
+                    Expire: s.product.returHari || '-',
+                    'Tanggal Opname': new Date().toLocaleDateString('id-ID')
+                }));
+                const ws = XLSX.utils.json_to_sheet(arr);
+                const wb = XLSX.utils.book_new();
+                XLSX.utils.book_append_sheet(wb, ws, 'Stok Opname');
+                XLSX.writeFile(wb, `stok_opname_${new Date().toISOString().slice(0,10)}.xlsx`);
+                showToast('Data stok diexport ke Excel!', 'success');
+            }
+
+            // ========== INIT ==========
+            renderStokTable();
+            console.log('✅ Stok Opname - Amanda Mart ready');
+            console.log('📋 Scan barcode → input qty → export Excel');
+        })();
+    </script>
+</body>
+</html>
